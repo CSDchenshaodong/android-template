@@ -1,0 +1,30 @@
+# ──────────────────────────────────────────────────
+# Dependabot 自动化依赖更新配置
+# 消费项目复制到 .github/ 目录并按需调整
+# ──────────────────────────────────────────────────
+version: 2
+updates:
+  # Gradle 依赖
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    labels:
+      - "dependencies"
+    reviewers:
+      - "team-infra"
+    open-pull-requests-limit: 10
+
+  # GitHub Actions 版本
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "ci"
+    reviewers:
+      - "team-infra"

@@ -1,0 +1,55 @@
+# ──────────────────────────────────────────────────
+# Lefthook 配置 — Git Hook 管理
+# 安装: ./scripts/install-git-hooks.sh
+# 消费项目按需调整 ktlint/spotless/detekt 的任务名
+# ──────────────────────────────────────────────────
+
+pre-commit:
+  parallel: true
+  commands:
+    ktlint:
+      glob: "*.kt"
+      run: ./gradlew ktlintFormat {staged_files} && git add {staged_files}
+      skip:
+        - merge
+        - rebase
+    spotless:
+      glob: "*.{kt,kts,xml}"
+      run: ./gradlew spotlessApply && git add {staged_files}
+      skip:
+        - merge
+        - rebase
+    detekt:
+      run: ./gradlew detekt --continue
+      skip:
+        - merge
+        - rebase
+
+commit-msg:
+  commands:
+    commitlint:
+      run: |
+        # 强制 Conventional Commits 格式
+        PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .{1,100}'
+        MSG=$(head -1 .git/COMMIT_EDITMSG)
+        if ! echo "$MSG" | grep -qE "$PATTERN"; then
+          echo ""
+          echo "❌ 提交信息不符合 Conventional Commits 规范"
+          echo ""
+          echo "格式: <type>: <description>"
+          echo ""
+          echo "支持的 type: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          echo ""
+          echo "示例:"
+          echo "  feat: add login screen"
+          echo "  fix: resolve crash on Android 14"
+          echo "  ci: add instrumented tests to pipeline"
+          echo "  refactor(auth): extract token manager"
+          echo ""
+          exit 1
+        fi
+
+pre-push:
+  commands:
+    ci-local:
+      run: ./scripts/ci-local.sh

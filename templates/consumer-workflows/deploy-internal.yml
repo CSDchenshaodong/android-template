@@ -1,0 +1,24 @@
+# ──────────────────────────────────────────────────
+# 消费项目内部分发入口 — 复制到项目 .github/workflows/
+# ──────────────────────────────────────────────────
+name: Deploy Internal
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      groups:
+        description: '发送给哪些测试组（逗号分隔）'
+        default: 'qa-team,dev-team'
+        required: true
+
+jobs:
+  deploy:
+    uses: CSDchenshaodong/android-template/.github/workflows/deploy-internal.yml@v1
+    secrets: inherit
+    with:
+      firebase-groups: ${{ github.event.inputs.groups || 'qa-team,dev-team' }}
+      # 按项目实际构建任务调整:
+      # build-task: 'assembleStagingRelease'
+      # apk-path: 'app/build/outputs/apk/staging/release/app-staging-release.apk'

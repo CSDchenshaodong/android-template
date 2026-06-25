@@ -1,0 +1,23 @@
+# ──────────────────────────────────────────────────
+# 消费项目 Main CI 入口 — 复制到项目 .github/workflows/
+# ──────────────────────────────────────────────────
+name: Main CI
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      run_instrumented:
+        description: '运行仪器化测试?'
+        type: boolean
+        default: false
+
+jobs:
+  ci:
+    uses: CSDchenshaodong/android-template/.github/workflows/ci.yml@v1
+    secrets: inherit
+    with:
+      run-instrumented: ${{ github.event.inputs.run_instrumented || false }}
+      # 按项目实际构建风味调整:
+      # build-flavors: '["dev", "staging", "prod"]'

@@ -1,0 +1,20 @@
+# ──────────────────────────────────────────────────
+# 消费项目 PR Check 入口 — 复制到项目 .github/workflows/
+# 这是消费项目唯一需要的文件，核心逻辑在共享仓库
+# ──────────────────────────────────────────────────
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, develop, 'release/**']
+
+jobs:
+  pr-check:
+    uses: CSDchenshaodong/android-template/.github/workflows/pr-check.yml@v1
+    secrets: inherit
+    # 标准项目无需 with: 参数。非标项目可覆盖:
+    # with:
+    #   java-version: '21'
+    #   lint-task: 'lint'
+    #   unit-test-task: 'test'
+    #   build-task: 'assemble'

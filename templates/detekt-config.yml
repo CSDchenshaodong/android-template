@@ -1,0 +1,78 @@
+# ──────────────────────────────────────────────────
+# Detekt 规则配置 — 全部可复用规则
+# 各项目复制到项目根目录，按团队偏好调整
+# ──────────────────────────────────────────────────
+
+complexity:
+  TooManyFunctions:
+    active: true
+    thresholdInFiles: 20
+    thresholdInClasses: 15
+    thresholdInInterfaces: 10
+  LongMethod:
+    active: true
+    threshold: 80
+  LongParameterList:
+    active: true
+    threshold: 6
+    ignoreDefaultParameters: true
+  ComplexCondition:
+    active: true
+    threshold: 4
+  NestedBlockDepth:
+    active: true
+    threshold: 4
+
+style:
+  MagicNumber:
+    active: true
+    ignoreNumbers: ['-1', '0', '1', '2']
+    ignoreHashCodeFunction: true
+    ignorePropertyDeclaration: true
+    ignoreAnnotation: true
+  UnusedPrivateMember:
+    active: true
+    allowedNames: ''
+  WildcardImport:
+    active: false                         # Android 项目中常用
+  MaxLineLength:
+    active: true
+    maxLineLength: 140
+    excludePackageStatements: true
+    excludeImportStatements: true
+  VarCouldBeVal:
+    active: true
+  UseCheckOrError:
+    active: true
+  ForbiddenComment:
+    active: true
+    values: ['FIXME', 'STOPSHIP']
+    allowedPatterns: ''
+
+naming:
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: ['Composable']       # Compose 函数不受限制
+  ClassNaming:
+    active: true
+  VariableNaming:
+    active: true
+    ignoreAnnotated: ['Composable']
+
+coroutines:
+  GlobalCoroutineUsage:
+    active: true
+  RedundantSuspendModifier:
+    active: true
+
+performance:
+  SpreadOperator:
+    active: true
+  ArrayPrimitive:
+    active: true
+
+empty-blocks:
+  EmptyFunctionBlock:
+    active: true
+  EmptyClassBlock:
+    active: true

@@ -1,0 +1,36 @@
+# ──────────────────────────────────────────────────
+# 消费项目商店上架入口 — 复制到项目 .github/workflows/
+# ──────────────────────────────────────────────────
+name: Release to Play Store
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      track:
+        description: '发布轨道'
+        required: true
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production_staged
+          - production_full
+          - halt_rollout
+      rollout_percentage:
+        description: '渐进发布百分比（仅 production_staged）'
+        required: false
+        default: '10'
+
+jobs:
+  release:
+    uses: CSDchenshaodong/android-template/.github/workflows/release-store.yml@v1
+    secrets: inherit
+    with:
+      track: ${{ github.event.inputs.track || 'internal' }}
+      rollout-percentage: ${{ github.event.inputs.rollout_percentage || '10' }}
+      # 按项目实际配置:
+      # package-name: 'com.example.yourapp'

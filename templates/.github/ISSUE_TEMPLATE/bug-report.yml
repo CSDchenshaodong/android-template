@@ -1,0 +1,54 @@
+name: 🐛 Bug Report
+description: 提交 Bug 报告
+title: "[Bug] "
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 App
+        2. 点击 xxx
+        3. 观察到 yyy
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: App 版本
+      placeholder: "1.2.3 (42)"
+
+  - type: dropdown
+    id: device
+    attributes:
+      label: 设备信息
+      options:
+        - "真机 - Android"
+        - "模拟器 - Android"
+        - "两者都有"
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 严重程度
+      options:
+        - "🔴 崩溃 - App 闪退"
+        - "🟠 严重 - 核心功能不可用"
+        - "🟡 一般 - 功能可用但有错误"
+        - "🟢 轻微 - UI 或体验问题"

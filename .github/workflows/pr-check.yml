@@ -1,0 +1,279 @@
+# ──────────────────────────────────────────────────
+# PR Check — 可复用 PR 门禁工作流
+# 其他项目引用方式:
+#   jobs:
+#     pr-check:
+#       uses: CSDchenshaodong/android-template/.github/workflows/pr-check.yml@v1
+#       secrets: inherit
+# ──────────────────────────────────────────────────
+name: PR Check (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: 'JDK 版本'
+        type: string
+        default: '17'
+      java-distribution:
+        description: 'JDK 发行版'
+        type: string
+        default: 'temurin'
+      lint-task:
+        description: 'Lint 检查的 Gradle 任务名'
+        type: string
+        default: 'lintDebug'
+      ktlint-task:
+        description: 'ktlint 检查的 Gradle 任务名（留空跳过）'
+        type: string
+        default: 'ktlintCheck'
+      detekt-task:
+        description: 'Detekt 检查的 Gradle 任务名（留空跳过）'
+        type: string
+        default: 'detekt'
+      spotless-task:
+        description: 'Spotless 检查的 Gradle 任务名（留空跳过）'
+        type: string
+        default: 'spotlessCheck'
+      unit-test-task:
+        description: '单元测试的 Gradle 任务名'
+        type: string
+        default: 'testDebugUnitTest'
+      coverage-task:
+        description: '覆盖率检查的 Gradle 任务名（留空跳过）'
+        type: string
+        default: 'jacocoTestCoverageVerification'
+      build-task:
+        description: '构建验证的 Gradle 任务名'
+        type: string
+        default: 'assembleDebug'
+      dependency-check-task:
+        description: '依赖安全检查的 Gradle 任务名（留空跳过）'
+        type: string
+        default: 'dependencyCheckAnalyze'
+      pr-title-types:
+        description: 'Conventional Commits 允许的 type，逗号分隔'
+        type: string
+        default: 'feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert'
+      max-pr-size:
+        description: 'PR 最大行数，超过则失败'
+        type: string
+        default: '1000'
+      jacoco-coverage-xml-path:
+        description: 'JaCoCo XML 报告路径（用于覆盖率检查）'
+        type: string
+        default: 'app/build/reports/jacoco/jacocoTestReport.xml'
+    secrets:
+      GITHUB_TOKEN:
+        description: 'GitHub Token（传入 secrets: inherit 自动获得）'
+        required: true
+      CODECOV_TOKEN:
+        description: 'Codecov 上传 token（可选）'
+        required: false
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 阶段 0: PR 元数据检查 ──
+  pr-meta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check PR title (Conventional Commits)
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: ${{ inputs.pr-title-types }}
+          requireScope: false
+
+      - name: Label by PR size
+        uses: codelytv/pr-size-labeler@v1
+        with:
+          xs_label: 'size/xs'
+          xs_max_size: 10
+          s_label: 'size/s'
+          s_max_size: 100
+          m_label: 'size/m'
+          m_max_size: 500
+          l_label: 'size/l'
+          l_max_size: 1000
+          xl_label: 'size/xl'
+          fail_if_xl: true
+          message_if_xl: |
+            🚫 PR 超过 ${{ inputs.max-pr-size }} 行变更，请拆分成多个小 PR 以方便 Review。
+
+  # ── 阶段 1: 代码风格 & 静态分析（并行执行）──
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Run lint checks
+        run: |
+          TASKS=""
+          [ -n "${{ inputs.ktlint-task }}" ] && TASKS="$TASKS ${{ inputs.ktlint-task }}"
+          [ -n "${{ inputs.detekt-task }}" ] && TASKS="$TASKS ${{ inputs.detekt-task }}"
+          [ -n "${{ inputs.lint-task }}" ] && TASKS="$TASKS ${{ inputs.lint-task }}"
+          [ -n "${{ inputs.spotless-task }}" ] && TASKS="$TASKS ${{ inputs.spotless-task }}"
+          if [ -n "$TASKS" ]; then
+            ./gradlew $TASKS --continue
+          else
+            echo "⚠️ 未配置任何 Lint 任务，跳过"
+          fi
+
+      - name: Upload lint reports (only on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            **/build/reports/ktlint/
+            **/build/reports/detekt/
+            **/build/reports/lint-results*.html
+            **/build/reports/spotless/
+
+  # ── 阶段 2: 单元测试 + 覆盖率 ──
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Run unit tests
+        run: ./gradlew ${{ inputs.unit-test-task }}
+
+      - name: Coverage verification
+        if: ${{ inputs.coverage-task != '' }}
+        run: ./gradlew ${{ inputs.coverage-task }} --continue
+
+      - name: Upload coverage to Codecov
+        if: ${{ inputs.coverage-task != '' && secrets.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ inputs.jacoco-coverage-xml-path }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Unit Tests
+          path: '**/build/test-results/**/*.xml'
+          reporter: java-junit
+
+  # ── 阶段 3: 构建验证 ──
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Assemble
+        run: ./gradlew ${{ inputs.build-task }}
+
+  # ── 阶段 4: 依赖安全扫描 ──
+  dependency-scan:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.dependency-check-task != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+
+      - name: OWASP dependency check
+        run: ./gradlew ${{ inputs.dependency-check-task }} --continue
+        continue-on-error: true
+
+      - name: Upload dependency report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check
+          path: build/reports/dependency-check-*.html
+
+  # ── 阶段 5: 自动评论汇总结果 ──
+  summary:
+    needs: [pr-meta, lint, unit-test, build-check, dependency-scan]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              pr_meta: '${{ needs.pr-meta.result }}',
+              lint: '${{ needs.lint.result }}',
+              unit_test: '${{ needs.unit-test.result }}',
+              build: '${{ needs.build-check.result }}',
+              deps: '${{ needs.dependency-scan.result }}',
+            };
+
+            const emoji = {
+              success: '✅',
+              failure: '❌',
+              skipped: '⏭️',
+              cancelled: '⚪',
+            };
+
+            const allPassed = Object.values(results).every(r => r === 'success' || r === 'skipped');
+
+            const body = `## 🤖 PR 自动检查结果
+
+            | 检查项 | 结果 |
+            |--------|------|
+            | PR 标题规范 | ${emoji[results.pr_meta] || '⚪'} ${results.pr_meta} |
+            | Lint (ktlint/Detekt/Lint) | ${emoji[results.lint] || '⚪'} ${results.lint} |
+            | 单元测试 + 覆盖率 | ${emoji[results.unit_test] || '⚪'} ${results.unit_test} |
+            | 构建验证 | ${emoji[results.build] || '⚪'} ${results.build} |
+            | 依赖安全扫描 | ${emoji[results.deps] || '⚪'} ${results.deps} |
+
+            ${allPassed
+              ? '🎉 **所有检查通过**！请 Review 代码后合并。'
+              : '⚠️ **有检查失败**，请点击上方 Actions 链接查看详情并修复。'}`;
+
+            // 找到或创建 "CI Results" 评论
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user?.type === 'Bot' && c.body?.includes('🤖 PR 自动检查结果')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

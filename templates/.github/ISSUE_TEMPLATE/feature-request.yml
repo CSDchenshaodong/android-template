@@ -1,0 +1,61 @@
+name: ✨ Feature Request
+description: 提出新功能需求
+title: "[Feature] "
+labels: ["feature", "triage"]
+body:
+  - type: textarea
+    id: user-story
+    attributes:
+      label: 用户故事
+      description: 用标准格式描述
+      placeholder: |
+        作为 <角色>
+        我希望 <功能>
+        以便 <价值>
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: 验收标准
+      description: 按照 Given/When/Then 格式
+      placeholder: |
+        - [ ] **Given** 用户已登录
+          **When** 用户点击"购买"按钮
+          **Then** 跳转到支付页面
+        - [ ] **Given** 用户未登录
+          **When** 用户点击"购买"按钮
+          **Then** 跳转到登录页面
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 优先级
+      options:
+        - "P0 - 紧急（阻塞其他工作）"
+        - "P1 - 高（本周必须完成）"
+        - "P2 - 中（本迭代完成）"
+        - "P3 - 低（有空再做）"
+    validations:
+      required: true
+
+  - type: textarea
+    id: figma-link
+    attributes:
+      label: Figma 设计稿链接
+      placeholder: https://www.figma.com/file/...
+
+  - type: textarea
+    id: api-doc
+    attributes:
+      label: 相关 API 文档
+      placeholder: Swagger / Postman 链接
+
+  - type: input
+    id: estimate
+    attributes:
+      label: 预估工时（小时）
+      placeholder: "4"

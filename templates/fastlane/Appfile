@@ -1,0 +1,6 @@
+# ──────────────────────────────────────────────────
+# fastlane Appfile
+# 复制到各项目 fastlane/ 目录，替换 package_name
+# ──────────────────────────────────────────────────
+json_key_file(ENV["PLAY_STORE_JSON_KEY_FILE"] || "play-store-key.json")
+package_name(ENV["PACKAGE_NAME"] || "com.example.yourapp")

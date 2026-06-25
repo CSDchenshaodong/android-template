@@ -1,0 +1,337 @@
+# ──────────────────────────────────────────────────
+# Main CI — 可复用主 CI 工作流 (合并到 develop 后触发)
+# 其他项目引用方式:
+#   jobs:
+#     ci:
+#       uses: CSDchenshaodong/android-template/.github/workflows/ci.yml@v1
+#       secrets: inherit
+# ──────────────────────────────────────────────────
+name: Main CI (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: 'JDK 版本'
+        type: string
+        default: '17'
+      java-distribution:
+        description: 'JDK 发行版'
+        type: string
+        default: 'temurin'
+      # ── 多 JDK 矩阵 ──
+      java-matrix:
+        description: 'JDK 版本矩阵 (JSON 数组，如 ["17","21"])'
+        type: string
+        default: '["17"]'
+      # ── Lint 任务 ──
+      lint-task:
+        description: 'Lint 检查 Gradle 任务名'
+        type: string
+        default: 'lintDebug'
+      ktlint-task:
+        description: 'ktlint 任务名（留空跳过）'
+        type: string
+        default: 'ktlintCheck'
+      detekt-task:
+        description: 'Detekt 任务名（留空跳过）'
+        type: string
+        default: 'detekt'
+      # ── 测试 ──
+      unit-test-task:
+        description: '单元测试 Gradle 任务名'
+        type: string
+        default: 'testDebugUnitTest'
+      jacoco-report-task:
+        description: 'JaCoCo 报告生成任务名（留空跳过）'
+        type: string
+        default: 'jacocoTestReport'
+      jacoco-coverage-xml-path:
+        description: 'JaCoCo XML 报告路径'
+        type: string
+        default: 'app/build/reports/jacoco/jacocoTestReport.xml'
+      # ── 构建矩阵 ──
+      build-flavors:
+        description: '构建风味 (JSON 数组，如 ["dev","staging","prod"])'
+        type: string
+        default: '["debug"]'
+      # ── UI 测试 ──
+      run-instrumented:
+        description: '是否运行仪器化测试'
+        type: boolean
+        default: false
+      instrumented-api-levels:
+        description: '仪器化测试 API 级别矩阵 (JSON 数组)'
+        type: string
+        default: '[27, 34]'
+      instrumented-test-package:
+        description: '仪器化测试包名过滤'
+        type: string
+        default: ''
+      # ── 内部分发 ──
+      enable-internal-distribution:
+        description: '是否在 CI 后自动内部分发'
+        type: boolean
+        default: false
+      internal-build-task:
+        description: '内部分发构建任务名'
+        type: string
+        default: 'assembleStagingRelease'
+      internal-apk-path:
+        description: '内部分发 APK 路径'
+        type: string
+        default: 'app/build/outputs/apk/staging/release/app-staging-release.apk'
+      firebase-groups:
+        description: 'Firebase 分发测试组，逗号分隔'
+        type: string
+        default: 'qa-team,dev-team'
+    secrets:
+      GITHUB_TOKEN:
+        description: 'GitHub Token'
+        required: true
+      CODECOV_TOKEN:
+        description: 'Codecov 上传 token（可选）'
+        required: false
+      FIREBASE_APP_ID:
+        description: 'Firebase 应用 ID（内部分发时需要）'
+        required: false
+      FIREBASE_CREDENTIALS:
+        description: 'Firebase 服务账号凭证 JSON（内部分发时需要）'
+        required: false
+      KEYSTORE_BASE64:
+        description: '签名文件 Base64（内部分发时需要）'
+        required: false
+      KEYSTORE_PASSWORD:
+        description: '签名密钥库密码'
+        required: false
+      KEY_ALIAS:
+        description: '签名别名'
+        required: false
+      KEY_PASSWORD:
+        description: '签名密钥密码'
+        required: false
+      SLACK_WEBHOOK_URL:
+        description: 'Slack Webhook URL（可选）'
+        required: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ── 完整 Lint ──
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Run lint checks
+        run: |
+          TASKS=""
+          [ -n "${{ inputs.ktlint-task }}" ] && TASKS="$TASKS ${{ inputs.ktlint-task }}"
+          [ -n "${{ inputs.detekt-task }}" ] && TASKS="$TASKS ${{ inputs.detekt-task }}"
+          [ -n "${{ inputs.lint-task }}" ] && TASKS="$TASKS ${{ inputs.lint-task }}"
+          if [ -n "$TASKS" ]; then
+            ./gradlew $TASKS --continue
+          else
+            echo "⚠️ 未配置 Lint 任务，跳过"
+          fi
+
+      - name: Upload lint reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            **/build/reports/ktlint/
+            **/build/reports/detekt/
+            **/build/reports/lint-results*.html
+
+  # ── 单元测试矩阵（多 JDK 版本验证）──
+  unit-test-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: ${{ fromJSON(inputs.java-matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ matrix.java }}
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Run unit tests
+        run: ./gradlew ${{ inputs.unit-test-task }}
+
+      - name: Generate coverage report
+        if: ${{ inputs.jacoco-report-task != '' }}
+        run: ./gradlew ${{ inputs.jacoco-report-task }}
+
+      - name: Upload coverage to Codecov
+        if: ${{ inputs.jacoco-report-task != '' && secrets.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v4
+        with:
+          files: ${{ inputs.jacoco-coverage-xml-path }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Publish test report
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Unit Tests (JDK ${{ matrix.java }})
+          path: '**/build/test-results/**/*.xml'
+          reporter: java-junit
+
+  # ── 多风味构建 ──
+  build-matrix:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavor: ${{ fromJSON(inputs.build-flavors) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Build ${{ matrix.flavor }}
+        run: |
+          # 支持 flavor 格式: "dev", "devDebug", "stagingRelease" 等
+          TASK="${{ matrix.flavor }}"
+          # 如果只给了 flavor 名，默认加 Debug
+          if [[ "$TASK" != *"Debug"* && "$TASK" != *"Release"* ]]; then
+            TASK="assemble${TASK^}Debug"
+          else
+            TASK="assemble${TASK^}"
+          fi
+          # 修正：标准 assemble 格式
+          if [[ "$TASK" != assemble* ]]; then
+            TASK="assemble$TASK"
+          fi
+          echo "Running: ./gradlew $TASK"
+          ./gradlew $TASK
+
+  # ── UI 测试（可选，手动触发或夜间）──
+  instrumented-test:
+    if: ${{ inputs.run-instrumented }}
+    needs: build-matrix
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        api-level: ${{ fromJSON(inputs.instrumented-api-levels) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          emulator-options: -no-window -gpu swiftshader -no-audio
+          disable-animations: true
+          script: |
+            adb wait-for-device
+            TEST_PACKAGE="${{ inputs.instrumented-test-package }}"
+            if [ -n "$TEST_PACKAGE" ]; then
+              ./gradlew connectedAndroidTest \
+                -Pandroid.testInstrumentationRunnerArguments.package="$TEST_PACKAGE"
+            else
+              ./gradlew connectedAndroidTest
+            fi
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-test-report-api${{ matrix.api-level }}
+          path: |
+            **/build/reports/androidTests/
+            **/build/outputs/androidTest-results/
+
+  # ── 内部分发（可选）──
+  internal-distribution:
+    if: ${{ inputs.enable-internal-distribution }}
+    needs: [build-matrix, unit-test-matrix]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ inputs.java-distribution }}
+          java-version: ${{ inputs.java-version }}
+
+      - uses: gradle/actions/setup-gradle@v3
+
+      - name: Decrypt keystore
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            CHANGES=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+          else
+            CHANGES=$(git log --since="7 days ago" --pretty=format:"- %s" --no-merges)
+          fi
+          {
+            echo "📦 Build: ${{ github.run_number }}"
+            echo "🌿 分支: ${{ github.ref_name }}"
+            echo "🔖 提交: $(git rev-parse --short HEAD)"
+            echo ""
+            echo "📝 变更:"
+            echo "$CHANGES"
+          } > release_notes.txt
+
+      - name: Build
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew ${{ inputs.internal-build-task }} \
+            -PRELEASE_KEYSTORE_PATH=app/release.keystore \
+            -PRELEASE_KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD" \
+            -PRELEASE_KEY_ALIAS="$KEY_ALIAS" \
+            -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD"
+
+      - name: Upload to Firebase App Distribution
+        if: ${{ secrets.FIREBASE_APP_ID != '' && secrets.FIREBASE_CREDENTIALS != '' }}
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_CREDENTIALS }}
+          groups: ${{ inputs.firebase-groups }}
+          file: ${{ inputs.internal-apk-path }}
+          releaseNotesFile: release_notes.txt
+
+      - name: Notify Slack
+        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "📱 新测试版本已就绪\n版本号: ${{ github.run_number }}\n分支: ${{ github.ref_name }}\nFirebase 组: ${{ inputs.firebase-groups }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

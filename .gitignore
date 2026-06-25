@@ -1,0 +1,32 @@
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Gradle
+!gradle/wrapper/gradle-wrapper.jar
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+
+# Secrets (never commit)
+*.keystore
+!app/debug.keystore
+play-store-key.json
+google-services.json
+GoogleService-Info.plist
+
+# Temporary
+*.log
+*.tmp
+*.swp
+*~

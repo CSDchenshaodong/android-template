@@ -1,0 +1,25 @@
+# ──────────────────────────────────────────────────
+# CODEOWNERS — 自动分配 Reviewer
+# 将 @team-xxx 替换为你组织的实际团队名或用户名
+# ──────────────────────────────────────────────────
+
+# 构建相关 → 基础架构团队
+*.gradle.kts                       @team-infra
+gradle.properties                  @team-infra
+buildSrc/                          @team-infra
+
+# CI/CD → 基础架构团队
+.github/workflows/                 @team-infra
+fastlane/                          @team-infra
+lefthook.yml                       @team-infra
+
+# 核心模块 → 各自负责人
+app/core/network/                  @team-backend
+app/core/database/                 @team-backend
+
+# UI/主题 → 设计系统团队
+app/ui/theme/                      @team-design
+app/ui/component/                  @team-design
+
+# 文档 → 全员审核
+*.md                               @team-infra

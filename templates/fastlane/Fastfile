@@ -1,0 +1,141 @@
+# ──────────────────────────────────────────────────
+# fastlane Fastfile — Play Store 发布自动化
+# 复制到各项目 fastlane/ 目录，按需调整
+# ──────────────────────────────────────────────────
+
+default_platform(:android)
+platform :android do
+
+  # ── 内部测试轨道 ──
+  lane :internal do
+    gradle(task: "bundleRelease")
+    upload_to_play_store(
+      track: 'internal',
+      release_status: 'completed',
+      metadata_path: ENV["METADATA_PATH"] || "./fastlane/metadata/android"
+    )
+    slack(message: "🔵 内部测试版已上线 Play Store (Internal Track)")
+  end
+
+  # ── Alpha（封闭测试）──
+  lane :alpha do
+    gradle(task: "bundleRelease")
+    upload_to_play_store(
+      track: 'alpha',
+      release_status: 'completed'
+    )
+    slack(message: "🟢 Alpha 版本已上线")
+  end
+
+  # ── Beta（公开测试）──
+  lane :beta do
+    gradle(task: "bundleRelease")
+    upload_to_play_store(
+      track: 'beta',
+      release_status: 'completed'
+    )
+    slack(message: "🟡 Beta 版本已上线 Play Store")
+  end
+
+  # ── 渐进式生产发布 ──
+  lane :production_staged do |options|
+    rollout_percentage = options[:percentage] || ENV["ROLLOUT_PERCENTAGE"] || 10
+
+    gradle(task: "bundleRelease")
+
+    upload_to_play_store(
+      track: 'production',
+      release_status: 'inProgress',
+      rollout: "#{rollout_percentage}%"
+    )
+
+    UI.message "📊 #{rollout_percentage}% 发布已推送，开始监控..."
+
+    # 如果启用了自动渐进发布
+    if ENV["ENABLE_STAGED_ROLLOUT"] == "true"
+      auto_rollout
+    end
+  end
+
+  # ── 全量发布 ──
+  lane :production_full do
+    upload_to_play_store(
+      track: 'production',
+      release_status: 'completed'
+    )
+    slack(message: "🚀 生产版本已全量发布！")
+  end
+
+  # ── 紧急暂停发布 ──
+  lane :halt_rollout do
+    upload_to_play_store(
+      track: 'production',
+      release_status: 'halted'
+    )
+    slack(message: "🛑 生产发布已紧急暂停！请立即排查问题。")
+  end
+
+  # ── 自动渐进发布（分阶段 + 崩溃监控）──
+  lane :auto_rollout do
+    stages = [
+      { percentage: 10,  wait_minutes: 30 },
+      { percentage: 25,  wait_minutes: 60 },
+      { percentage: 50,  wait_minutes: 120 },
+      { percentage: 100, wait_minutes: 0 },
+    ]
+
+    crash_free_threshold = (ENV["CRASH_FREE_THRESHOLD"] || "99.5").to_f
+
+    stages.each_with_index do |stage, index|
+      UI.header "📊 阶段 #{index + 1}/#{stages.count}: 扩大到 #{stage[:percentage]}%"
+
+      # 1. 扩大发布比例
+      upload_to_play_store(
+        track: 'production',
+        release_status: 'inProgress',
+        rollout: "#{stage[:percentage]}%"
+      )
+
+      # 2. 等待数据积累
+      if stage[:wait_minutes] > 0
+        UI.message "⏳ 等待 #{stage[:wait_minutes]} 分钟以积累数据..."
+        sleep(stage[:wait_minutes] * 60)
+      end
+
+      # 3. 检查崩溃率
+      crash_free = fetch_crash_free_rate
+
+      if crash_free < crash_free_threshold
+        UI.error "🚨 崩溃率异常！Crash-free: #{crash_free}%（阈值: #{crash_free_threshold}%）"
+        UI.error "紧急暂停发布..."
+
+        upload_to_play_store(
+          track: 'production',
+          release_status: 'halted'
+        )
+
+        slack(message: "🚨 生产发布已自动暂停！\n当前: #{stage[:percentage]}% 用户\nCrash-free: #{crash_free}%\n阈值: #{crash_free_threshold}%\n请立即排查！")
+
+        raise "发布因崩溃率超标而自动中断"
+      end
+
+      UI.success "✅ Crash-free: #{crash_free}% — 继续推进"
+    end
+
+    UI.success "🎉 全量发布完成！"
+  end
+
+  # ── 获取 Crashlytics 崩溃率 ──
+  def fetch_crash_free_rate
+    # TODO: 替换为实际的 Firebase Crashlytics API 调用
+    # curl -X POST "https://firebase.googleapis.com/v1beta1/..." \
+    #   -H "Authorization: Bearer $(gcloud auth print-access-token)"
+    begin
+      # 示例返回值，实际使用时替换为真实 API 调用
+      return 99.8
+    rescue => e
+      UI.important "⚠️ 无法获取崩溃数据: #{e.message}，假定正常"
+      return 100.0
+    end
+  end
+end
