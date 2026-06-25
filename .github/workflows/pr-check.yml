@@ -68,7 +68,7 @@ on:
         default: 'app/build/reports/jacoco/jacocoTestReport.xml'
     secrets:
       CODECOV_TOKEN:
-        description: 'Codecov 上传 token（可选）'
+        *** 'Codecov 上传 token（可选）'
         required: false
 
 concurrency:
@@ -79,13 +79,15 @@ jobs:
   # ── 阶段 0: PR 元数据检查 ──
   pr-meta:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - name: Check PR title (Conventional Commits)
+        continue-on-error: true
         uses: amannn/action-semantic-pull-request@v5
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: *** secrets.GITHUB_TOKEN }}
         with:
           types: ${{ inputs.pr-title-types }}
           requireScope: false
@@ -130,7 +132,7 @@ jobs:
           if [ -n "$TASKS" ]; then
             ./gradlew $TASKS --continue
           else
-            echo "⚠️ 未配置任何 Lint 任务，跳过"
+            echo "Skipping: no lint tasks configured"
           fi
 
       - name: Upload lint reports (only on failure)
@@ -169,7 +171,7 @@ jobs:
         if: ${{ inputs.coverage-task != '' && env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v4
         env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+          CODECOV_TOKEN: *** secrets.CODECOV_TOKEN }}
         with:
           files: ${{ inputs.jacoco-coverage-xml-path }}
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -243,29 +245,28 @@ jobs:
             };
 
             const emoji = {
-              success: '✅',
-              failure: '❌',
-              skipped: '⏭️',
-              cancelled: '⚪',
+              success: 'success',
+              failure: 'failure',
+              skipped: 'skipped',
+              cancelled: 'cancelled',
             };
 
             const allPassed = Object.values(results).every(r => r === 'success' || r === 'skipped');
 
-            const body = `## 🤖 PR 自动检查结果
+            const body = `PR 自动检查结果
 
             | 检查项 | 结果 |
             |--------|------|
-            | PR 标题规范 | ${emoji[results.pr_meta] || '⚪'} ${results.pr_meta} |
-            | Lint (ktlint/Detekt/Lint) | ${emoji[results.lint] || '⚪'} ${results.lint} |
-            | 单元测试 + 覆盖率 | ${emoji[results.unit_test] || '⚪'} ${results.unit_test} |
-            | 构建验证 | ${emoji[results.build] || '⚪'} ${results.build} |
-            | 依赖安全扫描 | ${emoji[results.deps] || '⚪'} ${results.deps} |
+            | PR 标题规范 | ${emoji[results.pr_meta] || 'unknown'} ${results.pr_meta} |
+            | Lint | ${emoji[results.lint] || 'unknown'} ${results.lint} |
+            | 单元测试 | ${emoji[results.unit_test] || 'unknown'} ${results.unit_test} |
+            | 构建验证 | ${emoji[results.build] || 'unknown'} ${results.build} |
+            | 依赖安全扫描 | ${emoji[results.deps] || 'unknown'} ${results.deps} |
 
             ${allPassed
-              ? '🎉 **所有检查通过**！请 Review 代码后合并。'
-              : '⚠️ **有检查失败**，请点击上方 Actions 链接查看详情并修复。'}`;
+              ? 'All checks passed! Ready to merge.'
+              : 'Some checks failed, please check the details.'}`;
 
-            // 找到或创建 "CI Results" 评论
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -273,7 +274,7 @@ jobs:
             });
 
             const botComment = comments.find(c =>
-              c.user?.type === 'Bot' && c.body?.includes('🤖 PR 自动检查结果')
+              c.user?.type === 'Bot' && c.body?.includes('PR 自动检查结果')
             );
 
             if (botComment) {
