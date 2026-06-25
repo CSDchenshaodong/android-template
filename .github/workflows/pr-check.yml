@@ -160,8 +160,10 @@ jobs:
         run: ./gradlew ${{ inputs.coverage-task }} --continue
 
       - name: Upload coverage to Codecov
-        if: ${{ inputs.coverage-task != '' && secrets.CODECOV_TOKEN != '' }}
+        if: ${{ inputs.coverage-task != '' && env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           files: ${{ inputs.jacoco-coverage-xml-path }}
           token: ${{ secrets.CODECOV_TOKEN }}

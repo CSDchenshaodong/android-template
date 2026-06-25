@@ -174,7 +174,7 @@ jobs:
         run: ./gradlew ${{ inputs.jacoco-report-task }}
 
       - name: Upload coverage to Codecov
-        if: ${{ inputs.jacoco-report-task != '' && secrets.CODECOV_TOKEN != '' }}
+        if: ${{ inputs.jacoco-report-task != '' && env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v4
         with:
           files: ${{ inputs.jacoco-coverage-xml-path }}
@@ -280,7 +280,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
 
       - name: Decrypt keystore
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: ${{ env.KEYSTORE_BASE64 != '' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: echo "$KEYSTORE_BASE64" | base64 -d > app/release.keystore
@@ -316,7 +316,7 @@ jobs:
             -PRELEASE_KEY_PASSWORD="$KEY_PASSWORD"
 
       - name: Upload to Firebase App Distribution
-        if: ${{ secrets.FIREBASE_APP_ID != '' && secrets.FIREBASE_CREDENTIALS != '' }}
+        if: ${{ env.FIREBASE_APP_ID != '' && env.FIREBASE_CREDENTIALS != '' }}
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
@@ -326,7 +326,7 @@ jobs:
           releaseNotesFile: release_notes.txt
 
       - name: Notify Slack
-        if: ${{ secrets.SLACK_WEBHOOK_URL != '' }}
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
         uses: slackapi/slack-github-action@v1
         with:
           payload: |
