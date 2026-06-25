@@ -1,0 +1,12 @@
+name: Auto PR
+on:
+  push:
+    branches:
+      - 'feature/**'
+
+jobs:
+  auto-pr:
+    uses: CSDchenshaodong/android-template/.github/workflows/auto-pr.yml@v1
+    secrets: inherit
+    with:
+      base-branch: 'main'

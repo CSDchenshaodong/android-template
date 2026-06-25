@@ -1,0 +1,127 @@
+# ──────────────────────────────────────────────────
+# Auto PR — 推送 feature 分支时自动创建 PR 并启用自动合并
+# 其他项目引用方式:
+#   name: Auto PR
+#   on:
+#     push:
+#       branches: ['feature/**']
+#   jobs:
+#     auto-pr:
+#       uses: CSDchenshaodong/android-template/.github/workflows/auto-pr.yml@v1
+#       secrets: inherit
+#       with:
+#         base-branch: 'main'
+# ──────────────────────────────────────────────────
+name: Auto PR (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      base-branch:
+        description: 'PR 目标分支'
+        type: string
+        default: 'main'
+      branch-pattern:
+        description: '触发创建 PR 的分支模式（正则）'
+        type: string
+        default: 'feature/'
+      merge-method:
+        description: '自动合并方式: merge / squash / rebase'
+        type: string
+        default: 'squash'
+      pr-title-prefix:
+        description: 'PR 标题前缀'
+        type: string
+        default: 'feat: '
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+
+jobs:
+  auto-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Auto create PR and enable auto-merge
+        uses: actions/github-script@v7
+        env:
+          BASE_BRANCH: ${{ inputs.base-branch }}
+          BRANCH_PATTERN: ${{ inputs.branch-pattern }}
+          MERGE_METHOD: ${{ inputs.merge-method }}
+          PR_TITLE_PREFIX: ${{ inputs.pr-title-prefix }}
+        with:
+          script: |
+            const branch = context.ref.replace('refs/heads/', '');
+            const branchPattern = process.env.BRANCH_PATTERN;
+            const baseBranch = process.env.BASE_BRANCH;
+            const mergeMethod = process.env.MERGE_METHOD;
+            const titlePrefix = process.env.PR_TITLE_PREFIX;
+
+            // 只处理匹配模式的分支
+            if (!branch.startsWith(branchPattern)) {
+              console.log(`跳过 ${branch}：不以 ${branchPattern} 开头`);
+              return;
+            }
+
+            // 从分支名生成可读标题
+            const featureName = branch.replace(branchPattern, '');
+            const title = titlePrefix + featureName
+              .replace(/[/-]/g, ' ')
+              .replace(/\b\w/g, c => c.toUpperCase());
+
+            // 检查是否已有该分支的 PR
+            const { data: existingPRs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.repo.owner}:${branch}`,
+              state: 'open'
+            });
+
+            if (existingPRs.length > 0) {
+              const pr = existingPRs[0];
+              console.log(`PR 已存在: #${pr.number} ${pr.html_url}`);
+
+              // 如果 PR 还没开自动合并，打开它
+              if (!pr.auto_merge) {
+                await github.rest.pulls.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
+                  auto_merge: { merge_method: mergeMethod }
+                });
+                console.log(`已为 PR #${pr.number} 启用自动合并`);
+              }
+              return;
+            }
+
+            // 创建新 PR
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              head: branch,
+              base: baseBranch,
+              body: [
+                `## 🤖 自动创建的 PR`,
+                ``,
+                `分支 \`${branch}\` 已推送，自动提交 PR 进行 CI 检查。`,
+                `CI 通过后将自动合并。`,
+              ].join('\n')
+            });
+
+            console.log(`PR 已创建: #${pr.number} ${pr.html_url}`);
+
+            // 启用自动合并
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              auto_merge: { merge_method: mergeMethod }
+            });
+
+            console.log(`已为 PR #${pr.number} 启用自动合并 (${mergeMethod})`);
