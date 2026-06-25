@@ -64,9 +64,6 @@ on:
         type: string
         default: 'app/build/reports/jacoco/jacocoTestReport.xml'
     secrets:
-      GITHUB_TOKEN:
-        description: 'GitHub Token（传入 secrets: inherit 自动获得）'
-        required: true
       CODECOV_TOKEN:
         description: 'Codecov 上传 token（可选）'
         required: false

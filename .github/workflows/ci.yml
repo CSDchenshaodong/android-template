@@ -86,9 +86,6 @@ on:
         type: string
         default: 'qa-team,dev-team'
     secrets:
-      GITHUB_TOKEN:
-        description: 'GitHub Token'
-        required: true
       CODECOV_TOKEN:
         description: 'Codecov 上传 token（可选）'
         required: false
