@@ -8,6 +8,9 @@
 # ──────────────────────────────────────────────────
 name: PR Check (Reusable)
 
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
 on:
   workflow_call:
     inputs:
@@ -114,6 +117,9 @@ jobs:
           java-version: ${{ inputs.java-version }}
       - uses: gradle/actions/setup-gradle@v3
 
+      - name: Fix gradlew permission
+        run: chmod +x gradlew
+
       - name: Run lint checks
         run: |
           TASKS=""
@@ -148,6 +154,9 @@ jobs:
           distribution: ${{ inputs.java-distribution }}
           java-version: ${{ inputs.java-version }}
       - uses: gradle/actions/setup-gradle@v3
+
+      - name: Fix gradlew permission
+        run: chmod +x gradlew
 
       - name: Run unit tests
         run: ./gradlew ${{ inputs.unit-test-task }}
@@ -185,6 +194,9 @@ jobs:
           java-version: ${{ inputs.java-version }}
       - uses: gradle/actions/setup-gradle@v3
 
+      - name: Fix gradlew permission
+        run: chmod +x gradlew
+
       - name: Assemble
         run: ./gradlew ${{ inputs.build-task }}
 
@@ -198,6 +210,9 @@ jobs:
         with:
           distribution: ${{ inputs.java-distribution }}
           java-version: ${{ inputs.java-version }}
+
+      - name: Fix gradlew permission
+        run: chmod +x gradlew
 
       - name: OWASP dependency check
         run: ./gradlew ${{ inputs.dependency-check-task }} --continue
