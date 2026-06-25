@@ -68,7 +68,7 @@ on:
         default: 'app/build/reports/jacoco/jacocoTestReport.xml'
     secrets:
       CODECOV_TOKEN:
-        *** 'Codecov 上传 token（可选）'
+        description: 'Codecov token'
         required: false
 
 concurrency:
